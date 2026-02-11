@@ -1,4 +1,4 @@
-import std/[unittest, sequtils, algorithm]
+import std/unittest
 import arena_context_store/types
 import arena_context_store/nodes
 import arena_context_store/arrays
