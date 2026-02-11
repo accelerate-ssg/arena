@@ -5,6 +5,7 @@
 
 import types
 import string_heap
+import origins
 
 proc newObj*(arena: var Arena, initialCap: int = 8): NodeId =
   ## Create a new empty object node.
@@ -55,6 +56,15 @@ proc objSet*(arena: var Arena, id: NodeId, key: string, val: NodeId) =
   for i in 0'u32 ..< node.entryCount:
     let entry = arena.entries[node.entryOffset + i]
     if keysMatch(arena, entry, key):
+      # Chain origins if both old and new values have different origins
+      let oldValueNode = entry.valueNode
+      let prevOrigin = arena.getNodeOrigin(oldValueNode)
+      let newOrigin = arena.getNodeOrigin(val)
+      if newOrigin != InvalidOriginId and prevOrigin != InvalidOriginId and newOrigin != prevOrigin:
+        let orig = arena.getOrigin(newOrigin)
+        let chained = arena.registerOrigin(orig.format, orig.sourceId, orig.offset,
+                                           previous = prevOrigin)
+        arena.setNodeOrigin(val, chained)
       # Update existing entry
       arena.entries[node.entryOffset + i].valueNode = val
       return
