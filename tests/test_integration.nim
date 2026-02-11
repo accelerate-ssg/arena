@@ -3,7 +3,11 @@ import arena_context_store/types
 import arena_context_store/nodes
 import arena_context_store/arrays
 import arena_context_store/objects
+import arena_context_store/origins
+import arena_context_store/tracking
 import arena_context_store/api
+import arena_context_store/loader
+import arena_context_store/loader_json
 
 # Helper: convert a JsonNode tree into arena nodes
 proc fromJson(arena: var Arena, j: JsonNode): NodeId =
@@ -305,3 +309,101 @@ suite "Integration - Stress Tests":
     check uint32(id1) == uint32(id2)
     check a1.getStr(id1) == "arena1"
     check a2.getStr(id2) == "arena2"
+
+suite "Integration - Loader + Origin":
+  test "load JSON via loader and verify origin chain on overwrite":
+    var arena = initArena()
+    arena.registerJsonLoader()
+    let base = arena.load("base.json", """{"title": "Base Title", "count": 1}""")
+    let over = arena.load("override.json", """{"title": "Override Title"}""")
+    # Overwrite title from base with value from override
+    let overTitle = arena[over, "title"]
+    arena.set(base, "title", overTitle)
+    # The overwritten value should have a chained origin
+    let history = arena.originHistory(overTitle)
+    check history.len == 2
+    check arena.getSourcePath(arena.getOrigin(history[0]).sourceId) == "override.json"
+    check arena.getSourcePath(arena.getOrigin(history[1]).sourceId) == "base.json"
+
+  test "load multiple files and merge into single context":
+    var arena = initArena()
+    arena.registerJsonLoader()
+    let siteData = arena.load("site.json",
+      """{"title": "My Site", "url": "https://example.com"}""")
+    let pageData = arena.load("page.json",
+      """{"title": "Hello World", "draft": false}""")
+    # Build a merged context
+    let ctx = arena.newObj()
+    arena.set(ctx, "site", siteData)
+    arena.set(ctx, "page", pageData)
+    # Verify structure
+    check arena.getStr(arena[arena[ctx, "site"], "title"]) == "My Site"
+    check arena.getStr(arena[arena[ctx, "page"], "title"]) == "Hello World"
+    # Verify origins are distinct
+    let siteOrigin = arena.getNodeOrigin(siteData)
+    let pageOrigin = arena.getNodeOrigin(pageData)
+    check siteOrigin != pageOrigin
+    check arena.getOrigin(siteOrigin).format == sfJson
+    check arena.getOrigin(pageOrigin).format == sfJson
+
+  test "loader round-trip via toJson":
+    var arena = initArena()
+    arena.registerJsonLoader()
+    let input = %*{
+      "site": {"title": "Blog", "nav": [{"label": "Home"}, {"label": "About"}]},
+      "page": {"title": "Post", "tags": ["nim", "web"]}
+    }
+    let root = arena.load("data.json", $input)
+    let output = arena.toJson(root)
+    check output == input
+
+suite "Integration - Tracking + Loader":
+  test "loader writes are tracked under a consumer":
+    var arena = initArena()
+    arena.registerJsonLoader()
+    arena.pushConsumer(1)
+    let root = arena.load("test.json", """{"x": 1, "y": 2}""")
+    arena.popConsumer()
+    let writes = arena.writeSet(1)
+    check root in writes
+    check writes.len > 0
+
+  test "script reads are tracked independently from loader writes":
+    var arena = initArena()
+    arena.registerJsonLoader()
+    # Load data as consumer 1 (loader)
+    arena.pushConsumer(1)
+    let root = arena.load("data.json", """{"title": "Hello", "count": 42}""")
+    arena.popConsumer()
+    # Read data as consumer 2 (script)
+    arena.pushConsumer(2)
+    discard arena.getStr(arena[root, "title"])
+    discard arena.getInt(arena[root, "count"])
+    arena.popConsumer()
+    # Consumer 1 should have writes but no reads
+    check arena.writeSet(1).len > 0
+    check arena.readSet(1).len == 0
+    # Consumer 2 should have reads but no writes
+    check arena.readSet(2).len > 0
+    check arena.writeSet(2).len == 0
+
+  test "full pipeline: load, read, write, verify tracking":
+    var arena = initArena()
+    arena.registerJsonLoader()
+    # Step 1: Load base data
+    arena.pushConsumer(10)  # loader consumer
+    let ctx = arena.load("config.json", """{"theme": "light", "lang": "en"}""")
+    arena.popConsumer()
+    # Step 2: Script reads and produces output
+    arena.pushConsumer(20)  # script consumer
+    let theme = arena.getStr(arena[ctx, "theme"])
+    let output = arena.newObj()
+    arena.set(output, "resolvedTheme", arena.newStr(theme))
+    arena.popConsumer()
+    # Verify loader tracking
+    check ctx in arena.writeSet(10)
+    # Verify script tracking
+    check ctx in arena.readSet(20)     # read the config
+    check output in arena.writeSet(20) # wrote the output
+    # Verify the output value
+    check arena.getStr(arena[output, "resolvedTheme"]) == "light"
