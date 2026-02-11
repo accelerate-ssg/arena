@@ -1,0 +1,19 @@
+# Nim build artifacts
+nimcache/
+*.exe
+*.out
+*.dll
+*.so
+*.dylib
+
+# Testament output
+testresults/
+outputGotten/
+megatest.nim
+
+# nimble
+*.nimble-link
+
+# OS
+.DS_Store
+Thumbs.db
