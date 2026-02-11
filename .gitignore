@@ -11,6 +11,10 @@ testresults/
 outputGotten/
 megatest.nim
 
+# Compiled test binaries (macOS has no extension)
+tests/test_*
+!tests/test_*.nim
+
 # nimble
 *.nimble-link
 
