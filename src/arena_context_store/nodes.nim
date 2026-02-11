@@ -7,6 +7,10 @@ proc addNode(arena: var Arena, node: Node): NodeId =
   ## Internal: append a node and return its ID.
   result = NodeId(uint32(arena.nodes.len))
   arena.nodes.add(node)
+  if arena.originStack.len > 0:
+    arena.nodeOrigins.add(arena.originStack[^1])
+  else:
+    arena.nodeOrigins.add(InvalidOriginId)
 
 proc newNull*(arena: var Arena): NodeId =
   addNode(arena, Node(kind: nkNull))

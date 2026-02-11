@@ -13,6 +13,10 @@ proc newArr*(arena: var Arena, initialCap: int = 4): NodeId =
     arena.children.add(InvalidNodeId)
   result = NodeId(uint32(arena.nodes.len))
   arena.nodes.add(Node(kind: nkArray, childOffset: offset, childLen: 0, childCap: cap))
+  if arena.originStack.len > 0:
+    arena.nodeOrigins.add(arena.originStack[^1])
+  else:
+    arena.nodeOrigins.add(InvalidOriginId)
 
 proc arrLen*(arena: Arena, id: NodeId): int =
   let node = arena.nodes[uint32(id)]

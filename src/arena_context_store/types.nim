@@ -49,20 +49,62 @@ type
     offset*: uint32
     size*: uint32
 
+  # --- Origin Tracking ---
+
+  SourceFormat* = enum
+    sfUnknown = 0
+    sfJson = 1
+    sfYaml = 2
+    sfCsv = 3
+    sfToml = 4
+    sfLiteral = 5    ## hardcoded / programmatic
+    sfComputed = 6   ## produced by a plugin
+
+  OriginId* = distinct uint32
+    ## Index into the origins table. InvalidOriginId means "no origin set".
+
+  Origin* = object
+    format*: SourceFormat
+    sourceId*: uint32     ## index into Arena.sources (interned path)
+    offset*: uint32       ## byte offset in source (0 = unknown)
+    previous*: OriginId   ## linked list — previous origin, InvalidOriginId = none
+
+  # --- Loader Registry ---
+
+  LoadProc* = proc(arena: var Arena, data: string, path: string): NodeId {.nimcall.}
+    ## A loader takes raw file content + path, returns root NodeId.
+
+  LoaderEntry* = object
+    format*: string
+    extensions*: seq[string]
+    load*: LoadProc
+
+  # --- Arena ---
+
   Arena* = object
     nodes*: seq[Node]
     strings*: seq[byte]
     entries*: seq[Entry]
     children*: seq[NodeId]
-    # tries buffer deferred to Phase 5
-    # provenance buffer deferred to Phase 2
     stringFreeList*: seq[FreeRegion]
+    # Origin tracking
+    sources*: seq[string]         ## interned source paths
+    origins*: seq[Origin]         ## origin records
+    nodeOrigins*: seq[OriginId]   ## parallel to nodes
+    originStack*: seq[OriginId]   ## push/pop context stack
+    # Loader registry
+    loaders*: seq[LoaderEntry]
 
 const
   InvalidNodeId* = NodeId(uint32.high)
+  InvalidOriginId* = OriginId(uint32.high)
 
 proc `==`*(a, b: NodeId): bool {.borrow.}
 proc `$`*(id: NodeId): string = "NodeId(" & $uint32(id) & ")"
+
+proc `==`*(a, b: OriginId): bool {.borrow.}
+proc `$`*(id: OriginId): string = "OriginId(" & $uint32(id) & ")"
+proc `!=`*(a, b: OriginId): bool = not (a == b)
 
 proc initArena*(): Arena =
   ## Create a new empty arena.
@@ -72,4 +114,9 @@ proc initArena*(): Arena =
     entries: @[],
     children: @[],
     stringFreeList: @[],
+    sources: @[],
+    origins: @[],
+    nodeOrigins: @[],
+    originStack: @[],
+    loaders: @[],
   )
