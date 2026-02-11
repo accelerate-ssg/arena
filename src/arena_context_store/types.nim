@@ -69,6 +69,17 @@ type
     offset*: uint32       ## byte offset in source (0 = unknown)
     previous*: OriginId   ## linked list — previous origin, InvalidOriginId = none
 
+  # --- Access Tracking ---
+
+  AccessKind* = enum
+    akRead
+    akWrite
+
+  AccessRecord* = object
+    kind*: AccessKind
+    nodeId*: NodeId
+    consumerId*: uint32
+
   # --- Loader Registry ---
 
   LoadProc* = proc(arena: var Arena, data: string, path: string): NodeId {.nimcall.}
@@ -94,10 +105,14 @@ type
     originStack*: seq[OriginId]   ## push/pop context stack
     # Loader registry
     loaders*: seq[LoaderEntry]
+    # Access tracking
+    accesses*: seq[AccessRecord]
+    consumerStack*: seq[uint32]  ## push/pop consumer context
 
 const
   InvalidNodeId* = NodeId(uint32.high)
   InvalidOriginId* = OriginId(uint32.high)
+  InvalidConsumerId* = uint32.high
 
 proc `==`*(a, b: NodeId): bool {.borrow.}
 proc `$`*(id: NodeId): string = "NodeId(" & $uint32(id) & ")"
@@ -119,4 +134,6 @@ proc initArena*(): Arena =
     nodeOrigins: @[],
     originStack: @[],
     loaders: @[],
+    accesses: @[],
+    consumerStack: @[],
   )

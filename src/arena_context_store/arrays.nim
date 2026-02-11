@@ -3,6 +3,7 @@
 ## Array children are stored in a contiguous buffer of NodeId values.
 
 import types
+import tracking
 
 proc newArr*(arena: var Arena, initialCap: int = 4): NodeId =
   ## Create a new empty array node.
@@ -17,14 +18,17 @@ proc newArr*(arena: var Arena, initialCap: int = 4): NodeId =
     arena.nodeOrigins.add(arena.originStack[^1])
   else:
     arena.nodeOrigins.add(InvalidOriginId)
+  arena.recordAccess(akWrite, result)
 
-proc arrLen*(arena: Arena, id: NodeId): int =
+proc arrLen*(arena: var Arena, id: NodeId): int =
+  arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkArray, "Expected array node, got " & $node.kind
   int(node.childLen)
 
-proc arrGet*(arena: Arena, id: NodeId, index: int): NodeId =
+proc arrGet*(arena: var Arena, id: NodeId, index: int): NodeId =
   ## Get child at index. Raises on out-of-bounds.
+  arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkArray, "Expected array node, got " & $node.kind
   assert index >= 0 and uint32(index) < node.childLen, "Array index out of bounds: " & $index
@@ -32,6 +36,7 @@ proc arrGet*(arena: Arena, id: NodeId, index: int): NodeId =
 
 proc arrPush*(arena: var Arena, id: NodeId, val: NodeId) =
   ## Append a value to the array.
+  arena.recordAccess(akWrite, id)
   var node = arena.nodes[uint32(id)]
   assert node.kind == nkArray, "Expected array node, got " & $node.kind
 
@@ -57,8 +62,9 @@ proc arrPush*(arena: var Arena, id: NodeId, val: NodeId) =
     node.childCap = newCap
     arena.nodes[uint32(id)] = node
 
-iterator arrItems*(arena: Arena, id: NodeId): NodeId =
+iterator arrItems*(arena: var Arena, id: NodeId): NodeId =
   ## Iterate over array children.
+  arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkArray
   for i in 0'u32 ..< node.childLen:

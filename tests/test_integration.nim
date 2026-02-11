@@ -30,7 +30,7 @@ proc fromJson(arena: var Arena, j: JsonNode): NodeId =
     obj
 
 # Helper: convert arena nodes back to JsonNode
-proc toJson(arena: Arena, id: NodeId): JsonNode =
+proc toJson(arena: var Arena, id: NodeId): JsonNode =
   case arena.kind(id)
   of nkNull:
     result = newJNull()

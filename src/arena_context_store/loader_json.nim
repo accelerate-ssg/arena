@@ -47,7 +47,7 @@ proc registerJsonLoader*(arena: var Arena) =
   ## Register the JSON loader for .json files.
   arena.registerLoader("json", @[".json"], jsonLoader)
 
-proc toJson*(arena: Arena, id: NodeId): JsonNode =
+proc toJson*(arena: var Arena, id: NodeId): JsonNode =
   ## Convert an arena node tree back to a JsonNode.
   case arena.kind(id)
   of nkNull:
