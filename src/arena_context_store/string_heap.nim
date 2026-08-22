@@ -7,6 +7,12 @@
 import std/algorithm
 import types
 
+proc copyInto(arena: var Arena, offset: uint32, data: openArray[byte]) =
+  ## Bulk-copy data into the heap at offset and null-terminate it.
+  if data.len > 0:
+    copyMem(addr arena.strings[offset], unsafeAddr data[0], data.len)
+  arena.strings[offset + uint32(data.len)] = 0
+
 proc allocString*(arena: var Arena, data: openArray[byte]): tuple[offset, len, cap: uint32] =
   ## Allocate a new string in the heap. Returns offset, length, capacity.
   ## Tries free list first (first-fit), then appends.
@@ -19,10 +25,7 @@ proc allocString*(arena: var Arena, data: openArray[byte]): tuple[offset, len, c
     let region = arena.stringFreeList[i]
     if region.size >= cap:
       let offset = region.offset
-      # Copy data into the freed region
-      for j in 0'u32 ..< dataLen:
-        arena.strings[offset + j] = data[j]
-      arena.strings[offset + dataLen] = 0  # null terminator
+      arena.copyInto(offset, data)
       # Shrink or remove free region
       if region.size > cap:
         arena.stringFreeList[i] = FreeRegion(offset: offset + cap, size: region.size - cap)
@@ -33,9 +36,7 @@ proc allocString*(arena: var Arena, data: openArray[byte]): tuple[offset, len, c
   # Append to end
   let offset = uint32(arena.strings.len)
   arena.strings.setLen(arena.strings.len + int(cap))
-  for j in 0'u32 ..< dataLen:
-    arena.strings[offset + j] = data[j]
-  arena.strings[offset + dataLen] = 0  # null terminator
+  arena.copyInto(offset, data)
   result = (offset, dataLen, cap)
 
 proc allocString*(arena: var Arena, s: string): tuple[offset, len, cap: uint32] =
@@ -50,16 +51,14 @@ proc readString*(arena: Arena, offset, length: uint32): string =
   if length == 0:
     return ""
   result = newString(length)
-  for i in 0'u32 ..< length:
-    result[i] = char(arena.strings[offset + i])
+  copyMem(addr result[0], unsafeAddr arena.strings[offset], int(length))
 
 proc readStringBytes*(arena: Arena, offset, length: uint32): seq[byte] =
   ## Read raw bytes from the string heap.
   if length == 0:
     return @[]
   result = newSeq[byte](length)
-  for i in 0'u32 ..< length:
-    result[i] = arena.strings[offset + i]
+  copyMem(addr result[0], unsafeAddr arena.strings[offset], int(length))
 
 proc updateString*(arena: var Arena, node: var Node, newData: openArray[byte]) =
   ## Mutate a string node's value. If the new data fits in the existing
@@ -71,9 +70,7 @@ proc updateString*(arena: var Arena, node: var Node, newData: openArray[byte]) =
 
   if needed <= node.strCap:
     # Fits in place
-    for i in 0'u32 ..< newLen:
-      arena.strings[node.strOffset + i] = newData[i]
-    arena.strings[node.strOffset + newLen] = 0  # null terminator
+    arena.copyInto(node.strOffset, newData)
     node.strLen = newLen
   else:
     # Must relocate — free old region, allocate new

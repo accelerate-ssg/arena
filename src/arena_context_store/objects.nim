@@ -35,10 +35,10 @@ proc keysMatch(arena: Arena, entry: Entry, key: string): bool =
   ## Check if an entry's key matches the given string.
   if entry.keyLen != uint32(key.len):
     return false
-  for i in 0'u32 ..< entry.keyLen:
-    if char(arena.strings[entry.keyOffset + i]) != key[i]:
-      return false
-  true
+  if entry.keyLen == 0:
+    return true
+  equalMem(unsafeAddr arena.strings[entry.keyOffset],
+           unsafeAddr key[0], int(entry.keyLen))
 
 proc objGet*(arena: Arena, id: NodeId, key: string): NodeId =
   ## Look up a key in the object. Returns InvalidNodeId if not found.
