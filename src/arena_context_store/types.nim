@@ -72,12 +72,25 @@ type
   # --- Access Tracking ---
 
   AccessKind* = enum
-    akRead
-    akWrite
+    akRead      ## Depends on the node's own record, or on one traversed edge.
+    akIterate   ## Depends on the container's whole edge set: count, keys, bindings.
+    akWrite     ## Created the node, mutated its value, or rebound one of its edges.
 
   AccessRecord* = object
+    ## One access by one consumer. `edge` narrows a container access to a
+    ## single entry (objects) or child slot (arrays); NoEdge means the access
+    ## concerned the node itself rather than one of its edges.
+    ##
+    ## Invalidation semantics for the index that consumes these records:
+    ##   akRead  + NoEdge -> stale when the node record changes (kind or
+    ##                       scalar value).
+    ##   akRead  + edge   -> stale when that edge is rebound.
+    ##   akIterate        -> stale when any edge is added, removed or rebound.
+    ## A lookup that missed records akIterate, because adding the absent key
+    ## would change the answer.
     kind*: AccessKind
     nodeId*: NodeId
+    edge*: uint32
     consumerId*: uint32
 
   # --- Loader Registry ---
@@ -113,6 +126,8 @@ const
   InvalidNodeId* = NodeId(uint32.high)
   InvalidOriginId* = OriginId(uint32.high)
   InvalidConsumerId* = uint32.high
+  NoEdge* = uint32.high
+    ## Marks an access to a node itself rather than to one of its edges.
 
 proc `==`*(a, b: NodeId): bool {.borrow.}
 proc `$`*(id: NodeId): string = "NodeId(" & $uint32(id) & ")"

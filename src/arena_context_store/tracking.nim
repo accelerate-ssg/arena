@@ -2,7 +2,12 @@
 ##
 ## Every read and write operation is recorded when a consumer is active
 ## (pushed via pushConsumer). Consumers are identified by uint32 IDs.
-## Use readSet/writeSet to query which nodes a consumer accessed.
+## Use readSet/iterateSet/writeSet to query which nodes a consumer accessed.
+##
+## Accesses distinguish reads of a node's own value (akRead with NoEdge),
+## traversals of a single container edge (akRead with an edge index), and
+## dependencies on a container's whole edge set (akIterate). See AccessRecord
+## in types.nim for the invalidation semantics.
 
 import types
 
@@ -27,12 +32,16 @@ proc currentConsumer*(arena: Arena): uint32 =
 
 # --- Internal recording ---
 
-proc recordAccess*(arena: var Arena, kind: AccessKind, nodeId: NodeId) =
+proc recordAccess*(arena: var Arena, kind: AccessKind, nodeId: NodeId,
+                   edge: uint32 = NoEdge) =
   ## Record an access if a consumer is active. Called by read/write procs.
+  ## `edge` is the entry index (objects) or child index (arrays) when the
+  ## access traversed a single edge of a container.
   if arena.consumerStack.len > 0:
     arena.accesses.add(AccessRecord(
       kind: kind,
       nodeId: nodeId,
+      edge: edge,
       consumerId: arena.consumerStack[^1],
     ))
 
@@ -42,6 +51,19 @@ proc readSet*(arena: Arena, consumerId: uint32): seq[NodeId] =
   ## Return unique NodeIds read by the given consumer.
   for rec in arena.accesses:
     if rec.consumerId == consumerId and rec.kind == akRead:
+      var found = false
+      for existing in result:
+        if existing == rec.nodeId:
+          found = true
+          break
+      if not found:
+        result.add(rec.nodeId)
+
+proc iterateSet*(arena: Arena, consumerId: uint32): seq[NodeId] =
+  ## Return unique NodeIds whose edge set the given consumer depends on
+  ## (iteration, length checks, and missed lookups).
+  for rec in arena.accesses:
+    if rec.consumerId == consumerId and rec.kind == akIterate:
       var found = false
       for existing in result:
         if existing == rec.nodeId:

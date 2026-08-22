@@ -25,7 +25,8 @@ proc newObj*(arena: var Arena, initialCap: int = 8): NodeId =
   arena.recordAccess(akWrite, result)
 
 proc objLen*(arena: var Arena, id: NodeId): int =
-  arena.recordAccess(akRead, id)
+  ## The length depends on the whole key set, so this is an iterate.
+  arena.recordAccess(akIterate, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkObject, "Expected object node, got " & $node.kind
   int(node.entryCount)
@@ -42,18 +43,20 @@ proc keysMatch(arena: Arena, entry: Entry, key: string): bool =
 proc objGet*(arena: var Arena, id: NodeId, key: string): NodeId =
   ## Look up a key in the object. Returns InvalidNodeId if not found.
   ## Uses linear scan (Phase 1).
-  arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkObject, "Expected object node, got " & $node.kind
   for i in 0'u32 ..< node.entryCount:
     let entry = arena.entries[node.entryOffset + i]
     if keysMatch(arena, entry, key):
+      # A hit depends only on the traversed edge.
+      arena.recordAccess(akRead, id, i)
       return entry.valueNode
+  # A miss depends on the whole key set: adding the key changes the answer.
+  arena.recordAccess(akIterate, id)
   InvalidNodeId
 
 proc objSet*(arena: var Arena, id: NodeId, key: string, val: NodeId) =
   ## Set a key-value pair. Overwrites if key exists, appends if not.
-  arena.recordAccess(akWrite, id)
   var node = arena.nodes[uint32(id)]
   assert node.kind == nkObject, "Expected object node, got " & $node.kind
 
@@ -61,6 +64,8 @@ proc objSet*(arena: var Arena, id: NodeId, key: string, val: NodeId) =
   for i in 0'u32 ..< node.entryCount:
     let entry = arena.entries[node.entryOffset + i]
     if keysMatch(arena, entry, key):
+      # Rebinding an existing edge.
+      arena.recordAccess(akWrite, id, i)
       # Chain origins if both old and new values have different origins
       let oldValueNode = entry.valueNode
       let prevOrigin = arena.getNodeOrigin(oldValueNode)
@@ -74,7 +79,9 @@ proc objSet*(arena: var Arena, id: NodeId, key: string, val: NodeId) =
       arena.entries[node.entryOffset + i].valueNode = val
       return
 
-  # Key not found — append
+  # Key not found — append. The written edge is the slot the new entry
+  # lands in.
+  arena.recordAccess(akWrite, id, node.entryCount)
   if node.entryCount < node.entryCap:
     let (keyOff, keyLen, _) = arena.allocString(key)
     arena.entries[node.entryOffset + node.entryCount] = Entry(
@@ -101,11 +108,19 @@ proc objSet*(arena: var Arena, id: NodeId, key: string, val: NodeId) =
     arena.nodes[uint32(id)] = node
 
 proc objHas*(arena: var Arena, id: NodeId, key: string): bool =
-  objGet(arena, id, key) != InvalidNodeId
+  ## Presence depends on the key set — adding or removing the key changes
+  ## the answer — so this is an iterate regardless of hit or miss.
+  arena.recordAccess(akIterate, id)
+  let node = arena.nodes[uint32(id)]
+  assert node.kind == nkObject, "Expected object node, got " & $node.kind
+  for i in 0'u32 ..< node.entryCount:
+    if keysMatch(arena, arena.entries[node.entryOffset + i], key):
+      return true
+  false
 
 proc objGetKey*(arena: var Arena, id: NodeId, index: int): string =
   ## Get the key at a given index in the object's entries.
-  arena.recordAccess(akRead, id)
+  arena.recordAccess(akRead, id, uint32(index))
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkObject
   assert index >= 0 and uint32(index) < node.entryCount
@@ -114,7 +129,7 @@ proc objGetKey*(arena: var Arena, id: NodeId, index: int): string =
 
 proc objGetVal*(arena: var Arena, id: NodeId, index: int): NodeId =
   ## Get the value NodeId at a given index in the object's entries.
-  arena.recordAccess(akRead, id)
+  arena.recordAccess(akRead, id, uint32(index))
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkObject
   assert index >= 0 and uint32(index) < node.entryCount
@@ -122,7 +137,7 @@ proc objGetVal*(arena: var Arena, id: NodeId, index: int): NodeId =
 
 iterator objPairs*(arena: var Arena, id: NodeId): (string, NodeId) =
   ## Iterate over key-value pairs in the object.
-  arena.recordAccess(akRead, id)
+  arena.recordAccess(akIterate, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkObject
   for i in 0'u32 ..< node.entryCount:
@@ -131,7 +146,7 @@ iterator objPairs*(arena: var Arena, id: NodeId): (string, NodeId) =
 
 iterator objKeys*(arena: var Arena, id: NodeId): string =
   ## Iterate over keys in the object.
-  arena.recordAccess(akRead, id)
+  arena.recordAccess(akIterate, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkObject
   for i in 0'u32 ..< node.entryCount:
