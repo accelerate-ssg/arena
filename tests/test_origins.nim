@@ -310,3 +310,54 @@ suite "Origins - Overwrite Chaining via objSet":
     arena.popOrigin()
     arena.set(obj, "key", v2)
     check arena.originDepth(v2) == 1
+
+suite "Origins - Source Attribution":
+  test "findSource returns the interned id without registering":
+    var arena = initArena()
+    let id = arena.registerSource("data/site.json")
+    check arena.findSource("data/site.json") == id
+    check arena.findSource("data/unknown.json") == InvalidSourceId
+    check arena.sources.len == 1
+
+  test "nodesFrom returns the nodes a source produced":
+    var arena = initArena()
+    let oidA = arena.registerOrigin(sfJson, "a.json")
+    let oidB = arena.registerOrigin(sfJson, "b.json")
+    arena.pushOrigin(oidA)
+    let a1 = arena.newStr("from a")
+    let a2 = arena.newInt(1)
+    arena.popOrigin()
+    arena.pushOrigin(oidB)
+    let b1 = arena.newStr("from b")
+    arena.popOrigin()
+    let untagged = arena.newInt(2)
+
+    let fromA = arena.nodesFrom("a.json")
+    check a1 in fromA
+    check a2 in fromA
+    check b1 notin fromA
+    check untagged notin fromA
+
+  test "nodesFrom follows the current origin after overwrite chaining":
+    var arena = initArena()
+    let oidA = arena.registerOrigin(sfJson, "a.json")
+    let oidB = arena.registerOrigin(sfYaml, "b.yaml")
+    arena.pushOrigin(oidA)
+    let obj = arena.newObj()
+    let v1 = arena.newStr("old")
+    arena.popOrigin()
+    arena.objSet(obj, "key", v1)
+    arena.pushOrigin(oidB)
+    let v2 = arena.newStr("new")
+    arena.popOrigin()
+    arena.objSet(obj, "key", v2)
+    # v2's chained origin still points at b.yaml as the current source.
+    check v2 in arena.nodesFrom("b.yaml")
+    check v2 notin arena.nodesFrom("a.json")
+    # v1 keeps its original attribution.
+    check v1 in arena.nodesFrom("a.json")
+
+  test "nodesFrom on an unregistered path is empty":
+    var arena = initArena()
+    discard arena.newStr("x")
+    check arena.nodesFrom("never/registered.json").len == 0

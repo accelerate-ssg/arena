@@ -20,6 +20,14 @@ proc getSourcePath*(arena: Arena, sourceId: uint32): string =
   ## Look up a source path by its interned ID.
   arena.sources[sourceId]
 
+proc findSource*(arena: Arena, path: string): uint32 =
+  ## Look up a source path's interned ID without registering it.
+  ## Returns InvalidSourceId if the path was never registered.
+  for i in 0 ..< arena.sources.len:
+    if arena.sources[i] == path:
+      return uint32(i)
+  InvalidSourceId
+
 # --- Origin registration ---
 
 proc registerOrigin*(arena: var Arena, format: SourceFormat, sourceId: uint32,
@@ -103,3 +111,22 @@ proc originDepth*(arena: Arena, id: NodeId): int =
     0
   else:
     history.len - 1
+
+# --- Source attribution ---
+
+proc nodesFrom*(arena: Arena, sourceId: uint32): seq[NodeId] =
+  ## Return every node whose current origin points at the given source.
+  ## Judged by the current origin only: a node overwritten by another
+  ## source no longer belongs to the one it originally came from.
+  for idx in 0 ..< arena.nodeOrigins.len:
+    let oid = arena.nodeOrigins[idx]
+    if oid != InvalidOriginId and arena.getOrigin(oid).sourceId == sourceId:
+      result.add(NodeId(uint32(idx)))
+
+proc nodesFrom*(arena: Arena, path: string): seq[NodeId] =
+  ## Return every node whose current origin points at the given source path.
+  ## Empty if the path was never registered as a source.
+  let sourceId = arena.findSource(path)
+  if sourceId == InvalidSourceId:
+    return @[]
+  arena.nodesFrom(sourceId)

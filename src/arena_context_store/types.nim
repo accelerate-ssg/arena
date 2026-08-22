@@ -135,6 +135,7 @@ const
   InvalidNodeId* = NodeId(uint32.high)
   InvalidOriginId* = OriginId(uint32.high)
   InvalidConsumerId* = uint32.high
+  InvalidSourceId* = uint32.high
   NoEdge* = uint32.high
     ## Marks an access to a node itself rather than to one of its edges.
 
