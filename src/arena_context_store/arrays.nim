@@ -20,14 +20,14 @@ proc newArr*(arena: var Arena, initialCap: int = 4): NodeId =
     arena.nodeOrigins.add(InvalidOriginId)
   arena.recordAccess(akWrite, result)
 
-proc arrLen*(arena: var Arena, id: NodeId): int =
+proc arrLen*(arena: Arena, id: NodeId): int =
   ## The length depends on the whole child set, so this is an iterate.
   arena.recordAccess(akIterate, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkArray, "Expected array node, got " & $node.kind
   int(node.childLen)
 
-proc arrGet*(arena: var Arena, id: NodeId, index: int): NodeId =
+proc arrGet*(arena: Arena, id: NodeId, index: int): NodeId =
   ## Get child at index. Raises on out-of-bounds.
   arena.recordAccess(akRead, id, uint32(index))
   let node = arena.nodes[uint32(id)]
@@ -64,7 +64,7 @@ proc arrPush*(arena: var Arena, id: NodeId, val: NodeId) =
     node.childCap = newCap
     arena.nodes[uint32(id)] = node
 
-iterator arrItems*(arena: var Arena, id: NodeId): NodeId =
+iterator arrItems*(arena: Arena, id: NodeId): NodeId =
   ## Iterate over array children.
   arena.recordAccess(akIterate, id)
   let node = arena.nodes[uint32(id)]

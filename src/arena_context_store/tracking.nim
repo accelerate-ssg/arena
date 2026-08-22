@@ -8,44 +8,57 @@
 ## traversals of a single container edge (akRead with an edge index), and
 ## dependencies on a container's whole edge set (akIterate). See AccessRecord
 ## in types.nim for the invalidation semantics.
+##
+## The log lives behind a ref (Arena.tracking) so recording works through an
+## immutable Arena: read procs never need var access. Setting Arena.tracking
+## to nil disables tracking entirely.
 
 import types
 
 # --- Consumer management ---
 
-proc pushConsumer*(arena: var Arena, consumerId: uint32) =
+proc pushConsumer*(arena: Arena, consumerId: uint32) =
   ## Push a consumer onto the context stack. All subsequent reads/writes
   ## will be attributed to this consumer.
-  arena.consumerStack.add(consumerId)
+  assert arena.tracking != nil, "Tracking is disabled"
+  arena.tracking.consumerStack.add(consumerId)
 
-proc popConsumer*(arena: var Arena) =
+proc popConsumer*(arena: Arena) =
   ## Pop the current consumer from the context stack.
-  assert arena.consumerStack.len > 0, "Consumer stack underflow"
-  arena.consumerStack.setLen(arena.consumerStack.len - 1)
+  assert arena.tracking != nil, "Tracking is disabled"
+  assert arena.tracking.consumerStack.len > 0, "Consumer stack underflow"
+  arena.tracking.consumerStack.setLen(arena.tracking.consumerStack.len - 1)
 
 proc currentConsumer*(arena: Arena): uint32 =
   ## Return the current consumer ID, or InvalidConsumerId if none.
-  if arena.consumerStack.len > 0:
-    arena.consumerStack[^1]
+  if arena.tracking != nil and arena.tracking.consumerStack.len > 0:
+    arena.tracking.consumerStack[^1]
   else:
     InvalidConsumerId
 
 # --- Internal recording ---
 
-proc recordAccess*(arena: var Arena, kind: AccessKind, nodeId: NodeId,
+proc recordAccess*(arena: Arena, kind: AccessKind, nodeId: NodeId,
                    edge: uint32 = NoEdge) =
   ## Record an access if a consumer is active. Called by read/write procs.
   ## `edge` is the entry index (objects) or child index (arrays) when the
   ## access traversed a single edge of a container.
-  if arena.consumerStack.len > 0:
-    arena.accesses.add(AccessRecord(
+  if arena.tracking != nil and arena.tracking.consumerStack.len > 0:
+    arena.tracking.accesses.add(AccessRecord(
       kind: kind,
       nodeId: nodeId,
       edge: edge,
-      consumerId: arena.consumerStack[^1],
+      consumerId: arena.tracking.consumerStack[^1],
     ))
 
 # --- Query ---
+
+proc accesses*(arena: Arena): seq[AccessRecord] =
+  ## The raw access log. Empty if tracking is disabled.
+  if arena.tracking != nil:
+    arena.tracking.accesses
+  else:
+    @[]
 
 proc readSet*(arena: Arena, consumerId: uint32): seq[NodeId] =
   ## Return unique NodeIds read by the given consumer.
@@ -84,15 +97,18 @@ proc writeSet*(arena: Arena, consumerId: uint32): seq[NodeId] =
       if not found:
         result.add(rec.nodeId)
 
-proc clearTracking*(arena: var Arena) =
+proc clearTracking*(arena: Arena) =
   ## Remove all access records.
-  arena.accesses.setLen(0)
+  if arena.tracking != nil:
+    arena.tracking.accesses.setLen(0)
 
-proc clearTracking*(arena: var Arena, consumerId: uint32) =
+proc clearTracking*(arena: Arena, consumerId: uint32) =
   ## Remove access records for a specific consumer.
+  if arena.tracking == nil:
+    return
   var i = 0
-  while i < arena.accesses.len:
-    if arena.accesses[i].consumerId == consumerId:
-      arena.accesses.delete(i)
+  while i < arena.tracking.accesses.len:
+    if arena.tracking.accesses[i].consumerId == consumerId:
+      arena.tracking.accesses.delete(i)
     else:
       i += 1

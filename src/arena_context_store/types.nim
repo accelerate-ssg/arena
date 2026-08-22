@@ -93,6 +93,14 @@ type
     edge*: uint32
     consumerId*: uint32
 
+  TrackingLog* = ref object
+    ## Runtime-only access log. Held by reference so read procs can record
+    ## through an immutable Arena: readers never need var access to the
+    ## data buffers themselves. Set to nil to disable tracking entirely
+    ## (e.g. on a full build, where nothing consumes it).
+    accesses*: seq[AccessRecord]
+    consumerStack*: seq[uint32]  ## push/pop consumer context
+
   # --- Loader Registry ---
 
   LoadProc* = proc(arena: var Arena, data: string, path: string): NodeId {.nimcall.}
@@ -119,8 +127,7 @@ type
     # Loader registry
     loaders*: seq[LoaderEntry]
     # Access tracking
-    accesses*: seq[AccessRecord]
-    consumerStack*: seq[uint32]  ## push/pop consumer context
+    tracking*: TrackingLog
 
 const
   InvalidNodeId* = NodeId(uint32.high)
@@ -149,6 +156,5 @@ proc initArena*(): Arena =
     nodeOrigins: @[],
     originStack: @[],
     loaders: @[],
-    accesses: @[],
-    consumerStack: @[],
+    tracking: TrackingLog(),
   )

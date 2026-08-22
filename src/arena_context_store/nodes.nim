@@ -30,29 +30,29 @@ proc newStr*(arena: var Arena, val: string): NodeId =
   let (offset, length, cap) = arena.allocString(val)
   addNode(arena, Node(kind: nkString, strOffset: offset, strLen: length, strCap: cap))
 
-proc kind*(arena: var Arena, id: NodeId): NodeKind =
+proc kind*(arena: Arena, id: NodeId): NodeKind =
   arena.recordAccess(akRead, id)
   arena.nodes[uint32(id)].kind
 
-proc getBool*(arena: var Arena, id: NodeId): bool =
+proc getBool*(arena: Arena, id: NodeId): bool =
   arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkBool, "Expected bool node, got " & $node.kind
   node.boolVal
 
-proc getInt*(arena: var Arena, id: NodeId): int64 =
+proc getInt*(arena: Arena, id: NodeId): int64 =
   arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkInt, "Expected int node, got " & $node.kind
   node.intVal
 
-proc getFloat*(arena: var Arena, id: NodeId): float64 =
+proc getFloat*(arena: Arena, id: NodeId): float64 =
   arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkFloat, "Expected float node, got " & $node.kind
   node.floatVal
 
-proc getStr*(arena: var Arena, id: NodeId): string =
+proc getStr*(arena: Arena, id: NodeId): string =
   arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
   assert node.kind == nkString, "Expected string node, got " & $node.kind
@@ -67,7 +67,7 @@ proc setStr*(arena: var Arena, id: NodeId, val: string) =
   else:
     updateString(arena, arena.nodes[uint32(id)], val.toOpenArrayByte(0, val.high))
 
-proc isNull*(arena: var Arena, id: NodeId): bool =
+proc isNull*(arena: Arena, id: NodeId): bool =
   arena.recordAccess(akRead, id)
   arena.nodes[uint32(id)].kind == nkNull
 

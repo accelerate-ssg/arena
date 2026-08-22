@@ -4,6 +4,7 @@ import arena_context_store/nodes
 import arena_context_store/arrays
 import arena_context_store/objects
 import arena_context_store/api
+import arena_context_store/tracking
 
 suite "API - Bracket Access":
   test "object bracket access by key":
@@ -92,3 +93,40 @@ suite "API - Iteration":
     for key, val in arena.pairs(obj):
       keys.add(key)
     check keys == @["name", "version"]
+
+suite "API - Immutable Reads":
+  proc buildArena(): Arena =
+    var arena = initArena()
+    let obj = arena.newObj()
+    let arr = arena.newArr()
+    arena.add(arr, arena.newInt(1))
+    arena.set(obj, "title", arena.newStr("hello"))
+    arena.set(obj, "items", arr)
+    arena
+
+  test "reads work through a let binding":
+    let arena = buildArena()
+    let root = NodeId(0)
+    check arena.kind(root) == nkObject
+    check arena.getStr(arena[root, "title"]) == "hello"
+    check arena.len(arena[root, "items"]) == 1
+    for key, val in arena.pairs(root):
+      discard
+    for child in arena.items(arena[root, "items"]):
+      discard
+
+  test "reads through a let binding still record accesses":
+    let arena = buildArena()
+    let root = NodeId(0)
+    arena.pushConsumer(7)
+    discard arena.getStr(arena[root, "title"])
+    arena.popConsumer()
+    check arena[root, "title"] in arena.readSet(7)
+
+  test "nil tracking disables recording":
+    var arena = buildArena()
+    arena.tracking = nil
+    let root = NodeId(0)
+    check arena.currentConsumer() == InvalidConsumerId
+    discard arena.getStr(arena[root, "title"])
+    check arena.accesses.len == 0
