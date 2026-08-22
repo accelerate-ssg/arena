@@ -37,31 +37,31 @@ proc kind*(arena: Arena, id: NodeId): NodeKind =
 proc getBool*(arena: Arena, id: NodeId): bool =
   arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
-  assert node.kind == nkBool, "Expected bool node, got " & $node.kind
+  node.expectKind(nkBool)
   node.boolVal
 
 proc getInt*(arena: Arena, id: NodeId): int64 =
   arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
-  assert node.kind == nkInt, "Expected int node, got " & $node.kind
+  node.expectKind(nkInt)
   node.intVal
 
 proc getFloat*(arena: Arena, id: NodeId): float64 =
   arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
-  assert node.kind == nkFloat, "Expected float node, got " & $node.kind
+  node.expectKind(nkFloat)
   node.floatVal
 
 proc getStr*(arena: Arena, id: NodeId): string =
   arena.recordAccess(akRead, id)
   let node = arena.nodes[uint32(id)]
-  assert node.kind == nkString, "Expected string node, got " & $node.kind
+  node.expectKind(nkString)
   readString(arena, node.strOffset, node.strLen)
 
 proc setStr*(arena: var Arena, id: NodeId, val: string) =
   ## Mutate an existing string node's value.
   arena.recordAccess(akWrite, id)
-  assert arena.nodes[uint32(id)].kind == nkString
+  arena.nodes[uint32(id)].expectKind(nkString)
   if val.len == 0:
     updateString(arena, arena.nodes[uint32(id)], newSeq[byte](0))
   else:
@@ -70,19 +70,19 @@ proc setStr*(arena: var Arena, id: NodeId, val: string) =
 proc setBool*(arena: var Arena, id: NodeId, val: bool) =
   ## Mutate an existing bool node's value.
   arena.recordAccess(akWrite, id)
-  assert arena.nodes[uint32(id)].kind == nkBool
+  arena.nodes[uint32(id)].expectKind(nkBool)
   arena.nodes[uint32(id)].boolVal = val
 
 proc setInt*(arena: var Arena, id: NodeId, val: int64) =
   ## Mutate an existing int node's value.
   arena.recordAccess(akWrite, id)
-  assert arena.nodes[uint32(id)].kind == nkInt
+  arena.nodes[uint32(id)].expectKind(nkInt)
   arena.nodes[uint32(id)].intVal = val
 
 proc setFloat*(arena: var Arena, id: NodeId, val: float64) =
   ## Mutate an existing float node's value.
   arena.recordAccess(akWrite, id)
-  assert arena.nodes[uint32(id)].kind == nkFloat
+  arena.nodes[uint32(id)].expectKind(nkFloat)
   arena.nodes[uint32(id)].floatVal = val
 
 proc isNull*(arena: Arena, id: NodeId): bool =

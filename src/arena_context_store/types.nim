@@ -143,6 +143,13 @@ proc `==`*(a, b: NodeId): bool {.borrow.}
 proc hash*(id: NodeId): Hash {.borrow.}
 proc `$`*(id: NodeId): string = "NodeId(" & $uint32(id) & ")"
 
+proc expectKind*(node: Node, kind: NodeKind) {.inline.} =
+  ## Raise if the node is not of the expected kind. A real raise, not an
+  ## assert: kind confusion must fail loudly in release builds too, where
+  ## asserts compile out and a wrong-kind access would corrupt the arena.
+  if node.kind != kind:
+    raise newException(ValueError, "Expected " & $kind & " node, got " & $node.kind)
+
 proc `==`*(a, b: OriginId): bool {.borrow.}
 proc `$`*(id: OriginId): string = "OriginId(" & $uint32(id) & ")"
 proc `!=`*(a, b: OriginId): bool = not (a == b)

@@ -65,7 +65,7 @@ proc updateString*(arena: var Arena, node: var Node, newData: openArray[byte]) =
   ## Mutate a string node's value. If the new data fits in the existing
   ## capacity, overwrites in place. Otherwise allocates new space and
   ## frees the old region.
-  assert node.kind == nkString
+  node.expectKind(nkString)
   let newLen = uint32(newData.len)
   let needed = newLen + 1  # +1 for null terminator
 

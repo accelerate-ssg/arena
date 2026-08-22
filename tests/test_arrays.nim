@@ -2,6 +2,7 @@ import std/unittest
 import arena_context_store/types
 import arena_context_store/nodes
 import arena_context_store/arrays
+import arena_context_store/objects
 
 suite "Array - Creation":
   test "create empty array":
@@ -156,3 +157,21 @@ suite "Array - Independent Arrays":
     check arena.getInt(arena.arrGet(gotInner1, 0)) == 1
     check arena.kind(gotInner2) == nkArray
     check arena.getStr(arena.arrGet(gotInner2, 0)) == "hello"
+
+suite "Arrays - Bounds Safety":
+  test "out-of-bounds arrGet raises":
+    var arena = initArena()
+    let arr = arena.newArr()
+    arena.arrPush(arr, arena.newInt(1))
+    expect IndexDefect:
+      discard arena.arrGet(arr, 1)
+    expect IndexDefect:
+      discard arena.arrGet(arr, -1)
+
+  test "array ops on an object raise":
+    var arena = initArena()
+    let obj = arena.newObj()
+    expect ValueError:
+      discard arena.arrLen(obj)
+    expect ValueError:
+      arena.arrPush(obj, arena.newInt(1))

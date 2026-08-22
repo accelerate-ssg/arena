@@ -225,3 +225,23 @@ suite "Nodes - Scalar Mutation":
     let count = arena.nodeCount
     arena.setInt(n, 2)
     check arena.nodeCount == count
+
+suite "Nodes - Kind Safety":
+  test "wrong-kind access raises ValueError":
+    var arena = initArena()
+    let n = arena.newInt(42)
+    expect ValueError:
+      discard arena.getStr(n)
+    expect ValueError:
+      discard arena.getBool(n)
+    expect ValueError:
+      arena.setStr(n, "nope")
+
+  test "kind checks survive release builds":
+    # expectKind is a real raise, not an assert: this suite is also run
+    # with -d:release by run_tests semantics if ever added; the check
+    # here documents the contract either way.
+    var arena = initArena()
+    let s = arena.newStr("text")
+    expect ValueError:
+      discard arena.getInt(s)
