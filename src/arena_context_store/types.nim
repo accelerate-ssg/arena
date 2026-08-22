@@ -3,6 +3,8 @@
 ## The arena consists of multiple contiguous buffers, each independently growable.
 ## NodeId is a stable identifier that is never reused or reassigned.
 
+import std/hashes
+
 type
   NodeId* = distinct uint32
     ## Stable identifier into the node table. Never reused.
@@ -137,6 +139,7 @@ const
     ## Marks an access to a node itself rather than to one of its edges.
 
 proc `==`*(a, b: NodeId): bool {.borrow.}
+proc hash*(id: NodeId): Hash {.borrow.}
 proc `$`*(id: NodeId): string = "NodeId(" & $uint32(id) & ")"
 
 proc `==`*(a, b: OriginId): bool {.borrow.}
