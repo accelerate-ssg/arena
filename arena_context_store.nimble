@@ -7,3 +7,8 @@ srcDir        = "src"
 
 # Dependencies
 requires "nim >= 2.0.0"
+
+# Tasks
+
+task bench, "Run performance benchmarks":
+  exec "nim c -r -d:release --mm:orc --hints:off --warnings:off bench/bench.nim"
