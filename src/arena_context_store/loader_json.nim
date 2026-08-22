@@ -11,8 +11,9 @@ import objects
 import origins
 import loader
 
-proc buildNode(arena: var Arena, j: JsonNode): NodeId =
-  ## Recursively convert a JsonNode tree into arena nodes.
+proc fromJson*(arena: var Arena, j: JsonNode): NodeId =
+  ## Recursively convert a JsonNode tree into arena nodes. Nodes are
+  ## tagged with the current origin, if one is pushed.
   case j.kind
   of JNull:
     arena.newNull()
@@ -27,12 +28,12 @@ proc buildNode(arena: var Arena, j: JsonNode): NodeId =
   of JArray:
     let arr = arena.newArr(initialCap = j.len)
     for child in j:
-      arrPush(arena, arr, arena.buildNode(child))
+      arrPush(arena, arr, arena.fromJson(child))
     arr
   of JObject:
     let obj = arena.newObj(initialCap = j.len)
     for key, val in j:
-      objSet(arena, obj, key, arena.buildNode(val))
+      objSet(arena, obj, key, arena.fromJson(val))
     obj
 
 proc jsonLoader*(arena: var Arena, data: string, path: string): NodeId =
@@ -40,7 +41,7 @@ proc jsonLoader*(arena: var Arena, data: string, path: string): NodeId =
   let oid = arena.registerOrigin(sfJson, path)
   arena.pushOrigin(oid)
   let parsed = parseJson(data)
-  result = arena.buildNode(parsed)
+  result = arena.fromJson(parsed)
   arena.popOrigin()
 
 proc registerJsonLoader*(arena: var Arena) =

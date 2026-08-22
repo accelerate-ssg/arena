@@ -3,6 +3,8 @@ import arena_context_store/types
 import arena_context_store/nodes
 import arena_context_store/origins
 import arena_context_store/api
+import arena_context_store/arrays
+import arena_context_store/objects
 import arena_context_store/loader
 import arena_context_store/loader_json
 
@@ -184,3 +186,28 @@ suite "Loader - Origin Integration":
     arena.registerJsonLoader()
     discard arena.load("test.json", """{"x": 1}""")
     check arena.currentOrigin() == InvalidOriginId
+
+suite "Loader - fromJson":
+  test "fromJson builds an arena tree from a JsonNode":
+    var arena = initArena()
+    let root = arena.fromJson(%*{"title": "hi", "tags": [1, 2]})
+    check arena.kind(root) == nkObject
+    check arena.getStr(arena.objGet(root, "title")) == "hi"
+    check arena.arrLen(arena.objGet(root, "tags")) == 2
+
+  test "fromJson tags nodes with the pushed origin":
+    var arena = initArena()
+    let oid = arena.registerOrigin(sfLiteral, "inline")
+    arena.pushOrigin(oid)
+    let root = arena.fromJson(%*{"a": 1})
+    arena.popOrigin()
+    check arena.getNodeOrigin(root) == oid
+    check arena.getNodeOrigin(arena.objGet(root, "a")) == oid
+
+  test "fromJson round-trips through toJson":
+    var arena = initArena()
+    let j = %*{"s": "x", "n": 3, "f": 1.5, "b": true, "z": nil, "arr": [{"k": "v"}]}
+    # Two statements on purpose: nesting the calls would let Nim copy the
+    # still-empty arena for toJson's immutable param before fromJson runs.
+    let root = arena.fromJson(j)
+    check arena.toJson(root) == j
