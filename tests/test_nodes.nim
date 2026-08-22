@@ -199,3 +199,29 @@ suite "Node Storage - Mixed":
     check arena.isNull(i) == false
     check arena.isNull(f) == false
     check arena.isNull(s) == false
+
+suite "Nodes - Scalar Mutation":
+  test "setBool mutates in place":
+    var arena = initArena()
+    let n = arena.newBool(false)
+    arena.setBool(n, true)
+    check arena.getBool(n) == true
+
+  test "setInt mutates in place":
+    var arena = initArena()
+    let n = arena.newInt(1)
+    arena.setInt(n, 99)
+    check arena.getInt(n) == 99
+
+  test "setFloat mutates in place":
+    var arena = initArena()
+    let n = arena.newFloat(1.5)
+    arena.setFloat(n, 2.25)
+    check arena.getFloat(n) == 2.25
+
+  test "scalar mutation does not add nodes":
+    var arena = initArena()
+    let n = arena.newInt(1)
+    let count = arena.nodeCount
+    arena.setInt(n, 2)
+    check arena.nodeCount == count

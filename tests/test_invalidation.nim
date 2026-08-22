@@ -30,8 +30,7 @@ suite "Invalidation - Scalar Writes":
 
     arena.clearTracking(Loader)
     arena.pushConsumer(Loader)
-    arena.nodes[uint32(n)].intVal = 2  # simulate a future setInt
-    arena.recordAccess(akWrite, n)
+    arena.setInt(n, 2)
     arena.popConsumer()
     check PageA in arena.invalidatedBy(Loader)
 

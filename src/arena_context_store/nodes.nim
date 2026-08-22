@@ -67,6 +67,24 @@ proc setStr*(arena: var Arena, id: NodeId, val: string) =
   else:
     updateString(arena, arena.nodes[uint32(id)], val.toOpenArrayByte(0, val.high))
 
+proc setBool*(arena: var Arena, id: NodeId, val: bool) =
+  ## Mutate an existing bool node's value.
+  arena.recordAccess(akWrite, id)
+  assert arena.nodes[uint32(id)].kind == nkBool
+  arena.nodes[uint32(id)].boolVal = val
+
+proc setInt*(arena: var Arena, id: NodeId, val: int64) =
+  ## Mutate an existing int node's value.
+  arena.recordAccess(akWrite, id)
+  assert arena.nodes[uint32(id)].kind == nkInt
+  arena.nodes[uint32(id)].intVal = val
+
+proc setFloat*(arena: var Arena, id: NodeId, val: float64) =
+  ## Mutate an existing float node's value.
+  arena.recordAccess(akWrite, id)
+  assert arena.nodes[uint32(id)].kind == nkFloat
+  arena.nodes[uint32(id)].floatVal = val
+
 proc isNull*(arena: Arena, id: NodeId): bool =
   arena.recordAccess(akRead, id)
   arena.nodes[uint32(id)].kind == nkNull
