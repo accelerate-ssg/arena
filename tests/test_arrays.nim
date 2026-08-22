@@ -4,6 +4,7 @@ import arena_context_store/nodes
 import arena_context_store/arrays
 import arena_context_store/objects
 import arena_context_store/tracking
+import arena_context_store/origins
 
 suite "Array - Creation":
   test "create empty array":
@@ -207,3 +208,45 @@ suite "Arrays - arrGetOrMiss":
     arena.popConsumer()
     check arr in arena.iterateSet(2)
     check arr notin arena.readSet(2)
+
+suite "Arrays - arrSet":
+  test "rebinds the slot in place":
+    var arena = initArena()
+    let arr = arena.newArr()
+    arena.arrPush(arr, arena.newInt(1))
+    arena.arrPush(arr, arena.newInt(2))
+    let replacement = arena.newStr("two")
+    arena.arrSet(arr, 1, replacement)
+    check arena.arrGet(arr, 1) == replacement
+    check arena.getInt(arena.arrGet(arr, 0)) == 1
+    check arena.arrLen(arr) == 2
+
+  test "out of bounds raises":
+    var arena = initArena()
+    let arr = arena.newArr()
+    expect IndexDefect:
+      arena.arrSet(arr, 0, arena.newInt(1))
+
+  test "records a write on the slot's edge":
+    var arena = initArena()
+    let arr = arena.newArr()
+    arena.arrPush(arr, arena.newInt(1))
+    let replacement = arena.newInt(2)
+    arena.pushConsumer(1)
+    arena.arrSet(arr, 0, replacement)
+    arena.popConsumer()
+    check arr in arena.writeSet(1)
+
+  test "chains origins across the rebind":
+    var arena = initArena()
+    let oid1 = arena.registerOrigin(sfYaml, "posts.yaml")
+    let oid2 = arena.registerOrigin(sfYaml, "posts.yaml")
+    let arr = arena.newArr()
+    arena.pushOrigin(oid1)
+    arena.arrPush(arr, arena.newStr("old"))
+    arena.popOrigin()
+    arena.pushOrigin(oid2)
+    let fresh = arena.newStr("new")
+    arena.popOrigin()
+    arena.arrSet(arr, 0, fresh)
+    check arena.originHistory(fresh).len == 2

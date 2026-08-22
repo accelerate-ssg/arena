@@ -3,6 +3,7 @@
 ## Array children are stored in a contiguous buffer of NodeId values.
 
 import types
+import origins
 import tracking
 
 proc newArr*(arena: var Arena, initialCap: int = 4): NodeId =
@@ -77,6 +78,27 @@ proc arrPush*(arena: var Arena, id: NodeId, val: NodeId) =
     node.childLen += 1
     node.childCap = newCap
     arena.nodes[uint32(id)] = node
+
+proc arrSet*(arena: var Arena, id: NodeId, index: int, val: NodeId) =
+  ## Rebind the child at index. Raises on out-of-bounds. Chains origins
+  ## like an object rebind: the new value remembers what it replaced.
+  let node = arena.nodes[uint32(id)]
+  node.expectKind(nkArray)
+  if index < 0 or uint32(index) >= node.childLen:
+    raise newException(IndexDefect, "Array index out of bounds: " & $index)
+  arena.recordAccess(akWrite, id, uint32(index))
+
+  let oldValueNode = arena.children[node.childOffset + uint32(index)]
+  let prevOrigin = arena.getNodeOrigin(oldValueNode)
+  let newOrigin = arena.getNodeOrigin(val)
+  if newOrigin != InvalidOriginId and prevOrigin != InvalidOriginId and
+     newOrigin != prevOrigin:
+    let orig = arena.getOrigin(newOrigin)
+    let chained = arena.registerOrigin(orig.format, orig.sourceId, orig.offset,
+                                       previous = prevOrigin)
+    arena.setNodeOrigin(val, chained)
+
+  arena.children[node.childOffset + uint32(index)] = val
 
 iterator arrItems*(arena: Arena, id: NodeId): NodeId =
   ## Iterate over array children.
