@@ -60,10 +60,13 @@ proc accesses*(arena: Arena): seq[AccessRecord] =
   else:
     @[]
 
-proc readSet*(arena: Arena, consumerId: uint32): seq[NodeId] =
-  ## Return unique NodeIds read by the given consumer.
-  for rec in arena.accesses:
-    if rec.consumerId == consumerId and rec.kind == akRead:
+proc accessSet(arena: Arena, consumerId: uint32, kind: AccessKind): seq[NodeId] =
+  ## Unique NodeIds the consumer touched with the given access kind.
+  ## Iterates the log in place — the `accesses` proc would copy it.
+  if arena.tracking == nil:
+    return
+  for rec in arena.tracking.accesses:
+    if rec.consumerId == consumerId and rec.kind == kind:
       var found = false
       for existing in result:
         if existing == rec.nodeId:
@@ -71,31 +74,19 @@ proc readSet*(arena: Arena, consumerId: uint32): seq[NodeId] =
           break
       if not found:
         result.add(rec.nodeId)
+
+proc readSet*(arena: Arena, consumerId: uint32): seq[NodeId] =
+  ## Return unique NodeIds read by the given consumer.
+  arena.accessSet(consumerId, akRead)
 
 proc iterateSet*(arena: Arena, consumerId: uint32): seq[NodeId] =
   ## Return unique NodeIds whose edge set the given consumer depends on
   ## (iteration, length checks, and missed lookups).
-  for rec in arena.accesses:
-    if rec.consumerId == consumerId and rec.kind == akIterate:
-      var found = false
-      for existing in result:
-        if existing == rec.nodeId:
-          found = true
-          break
-      if not found:
-        result.add(rec.nodeId)
+  arena.accessSet(consumerId, akIterate)
 
 proc writeSet*(arena: Arena, consumerId: uint32): seq[NodeId] =
   ## Return unique NodeIds written by the given consumer.
-  for rec in arena.accesses:
-    if rec.consumerId == consumerId and rec.kind == akWrite:
-      var found = false
-      for existing in result:
-        if existing == rec.nodeId:
-          found = true
-          break
-      if not found:
-        result.add(rec.nodeId)
+  arena.accessSet(consumerId, akWrite)
 
 proc clearTracking*(arena: Arena) =
   ## Remove all access records.

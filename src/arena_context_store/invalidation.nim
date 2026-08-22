@@ -32,32 +32,41 @@ proc invalidatedBy*(arena: Arena, writes: openArray[AccessRecord]): HashSet[uint
   ## Return the consumers whose recorded reads or iterates are made stale
   ## by the given write records. Consumers appearing in `writes` themselves
   ## are not excluded — use the writerId overload for that.
-  # Index the log's reads once: exact (node, edge) readers, and iterators.
-  var edgeReaders = initTable[(NodeId, uint32), HashSet[uint32]]()
-  var iterators = initTable[NodeId, HashSet[uint32]]()
+  ##
+  ## The write set is small (one reloaded file, one step) while the read
+  ## log is large, so the writes are indexed and the log is matched in a
+  ## single allocation-free scan — never the other way around.
+  if arena.tracking == nil:
+    return
 
-  for rec in arena.accesses:
+  var edgeWrites = initHashSet[(NodeId, uint32)]()
+  var containersWritten = initHashSet[NodeId]()
+  for w in writes:
+    if w.kind == akWrite:
+      edgeWrites.incl((w.nodeId, w.edge))
+      if w.edge != NoEdge:
+        containersWritten.incl(w.nodeId)
+  if edgeWrites.len == 0:
+    return
+
+  for rec in arena.tracking.accesses:
     case rec.kind
     of akRead:
-      edgeReaders.mgetOrPut((rec.nodeId, rec.edge), initHashSet[uint32]()).incl(rec.consumerId)
+      if (rec.nodeId, rec.edge) in edgeWrites:
+        result.incl(rec.consumerId)
     of akIterate:
-      iterators.mgetOrPut(rec.nodeId, initHashSet[uint32]()).incl(rec.consumerId)
+      if rec.nodeId in containersWritten:
+        result.incl(rec.consumerId)
     of akWrite:
       discard
-
-  for w in writes:
-    if w.kind != akWrite:
-      continue
-    if edgeReaders.hasKey((w.nodeId, w.edge)):
-      result.incl(edgeReaders[(w.nodeId, w.edge)])
-    if w.edge != NoEdge and iterators.hasKey(w.nodeId):
-      result.incl(iterators[w.nodeId])
 
 proc invalidatedBy*(arena: Arena, writerId: uint32): HashSet[uint32] =
   ## Return the consumers made stale by everything `writerId` has written
   ## since its records were last cleared. The writer itself is excluded.
+  if arena.tracking == nil:
+    return
   var writes: seq[AccessRecord] = @[]
-  for rec in arena.accesses:
+  for rec in arena.tracking.accesses:
     if rec.consumerId == writerId and rec.kind == akWrite:
       writes.add(rec)
   result = arena.invalidatedBy(writes)
