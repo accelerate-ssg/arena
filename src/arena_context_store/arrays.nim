@@ -36,6 +36,19 @@ proc arrGet*(arena: Arena, id: NodeId, index: int): NodeId =
     raise newException(IndexDefect, "Array index out of bounds: " & $index)
   arena.children[node.childOffset + uint32(index)]
 
+proc arrGetOrMiss*(arena: Arena, id: NodeId, index: int): NodeId =
+  ## Get child at index, or InvalidNodeId when out of bounds. A hit
+  ## depends only on the traversed edge; a miss depends on the length —
+  ## appending would change the answer — so it records an iterate.
+  let node = arena.nodes[uint32(id)]
+  node.expectKind(nkArray)
+  if index >= 0 and uint32(index) < node.childLen:
+    arena.recordAccess(akRead, id, uint32(index))
+    arena.children[node.childOffset + uint32(index)]
+  else:
+    arena.recordAccess(akIterate, id)
+    InvalidNodeId
+
 proc arrPush*(arena: var Arena, id: NodeId, val: NodeId) =
   ## Append a value to the array.
   var node = arena.nodes[uint32(id)]

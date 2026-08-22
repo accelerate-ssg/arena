@@ -3,6 +3,7 @@ import arena_context_store/types
 import arena_context_store/nodes
 import arena_context_store/arrays
 import arena_context_store/objects
+import arena_context_store/tracking
 
 suite "Array - Creation":
   test "create empty array":
@@ -175,3 +176,34 @@ suite "Arrays - Bounds Safety":
       discard arena.arrLen(obj)
     expect ValueError:
       arena.arrPush(obj, arena.newInt(1))
+
+suite "Arrays - arrGetOrMiss":
+  test "in-bounds returns the child":
+    var arena = initArena()
+    let arr = arena.newArr()
+    let a = arena.newInt(1)
+    arena.arrPush(arr, a)
+    check arena.arrGetOrMiss(arr, 0) == a
+
+  test "out-of-bounds and negative return InvalidNodeId":
+    var arena = initArena()
+    let arr = arena.newArr()
+    arena.arrPush(arr, arena.newInt(1))
+    check arena.arrGetOrMiss(arr, 1) == InvalidNodeId
+    check arena.arrGetOrMiss(arr, -1) == InvalidNodeId
+
+  test "a hit records the edge, a miss records an iterate":
+    var arena = initArena()
+    let arr = arena.newArr()
+    arena.arrPush(arr, arena.newInt(1))
+    arena.pushConsumer(1)
+    discard arena.arrGetOrMiss(arr, 0)
+    arena.popConsumer()
+    check arr in arena.readSet(1)
+    check arr notin arena.iterateSet(1)
+    arena.clearTracking()
+    arena.pushConsumer(2)
+    discard arena.arrGetOrMiss(arr, 7)
+    arena.popConsumer()
+    check arr in arena.iterateSet(2)
+    check arr notin arena.readSet(2)
