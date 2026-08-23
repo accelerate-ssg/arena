@@ -5,6 +5,8 @@ import arena_context_store/arrays
 import arena_context_store/objects
 import arena_context_store/api
 import arena_context_store/tracking
+import arena_context_store/invalidation
+import std/sets
 
 suite "Tracking - Consumer Management":
   test "no consumer active by default":
@@ -438,3 +440,38 @@ suite "Tracking - Edges":
     arena.popConsumer()
     check arena.recordsFor(1).len == 2
     check arena.readSet(1).len == 1
+
+suite "Tracking - retireSubtree":
+  test "every node and edge of the subtree is marked written":
+    var arena = initArena()
+    let obj = arena.newObj()
+    let inner = arena.newArr()
+    let leaf = arena.newInt(1)
+    arena.arrPush(inner, leaf)
+    arena.objSet(obj, "list", inner)
+    arena.pushConsumer(5)
+    arena.retireSubtree(obj)
+    arena.popConsumer()
+    let writes = arena.writeSet(5)
+    check obj in writes
+    check inner in writes
+    check leaf in writes
+
+  test "a direct-handle reader of a retired node is invalidated":
+    var arena = initArena()
+    let obj = arena.newObj()
+    let leaf = arena.newStr("value")
+    arena.objSet(obj, "k", leaf)
+    arena.pushConsumer(1)
+    discard arena.getStr(leaf)   # read through a handle, no edge
+    arena.popConsumer()
+    arena.pushConsumer(2)
+    arena.retireSubtree(obj)
+    arena.popConsumer()
+    check 1'u32 in arena.invalidatedBy(2'u32)
+
+  test "records nothing without a consumer":
+    var arena = initArena()
+    let obj = arena.newObj()
+    arena.retireSubtree(obj)
+    check arena.accesses.len == 0

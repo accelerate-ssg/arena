@@ -103,3 +103,30 @@ proc clearTracking*(arena: Arena, consumerId: uint32) =
       arena.tracking.accesses.delete(i)
     else:
       i += 1
+
+proc retireSubtree*(arena: Arena, id: NodeId) =
+  ## Record a write on every node of a subtree that is being replaced
+  ## wholesale, and on every edge of each container in it. Readers that
+  ## reached those nodes directly — through a handle rather than an edge
+  ## from an ancestor — are invalidated like any other reader of what
+  ## was rebound. Reads nothing into the log while walking.
+  if arena.tracking == nil or arena.tracking.consumerStack.len == 0:
+    return
+  var stack = @[id]
+  while stack.len > 0:
+    let node = stack.pop()
+    if node == InvalidNodeId:
+      continue
+    arena.recordAccess(akWrite, node)
+    let n = arena.nodes[uint32(node)]
+    case n.kind
+    of nkArray:
+      for i in 0'u32 ..< n.childLen:
+        arena.recordAccess(akWrite, node, i)
+        stack.add(arena.children[n.childOffset + i])
+    of nkObject:
+      for i in 0'u32 ..< n.entryCount:
+        arena.recordAccess(akWrite, node, i)
+        stack.add(arena.entries[n.entryOffset + i].valueNode)
+    else:
+      discard
