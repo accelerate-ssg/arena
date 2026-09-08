@@ -1,5 +1,5 @@
 # Package
-version       = "0.1.0"
+version       = "0.1.1"
 author        = "Jonas Andersson, Claude (Anthropic)"
 description   = "Arena-allocated context store for static site generators"
 license       = "MIT"

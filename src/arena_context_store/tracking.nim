@@ -95,14 +95,21 @@ proc clearTracking*(arena: Arena) =
 
 proc clearTracking*(arena: Arena, consumerId: uint32) =
   ## Remove access records for a specific consumer.
+  ##
+  ## Single-pass compaction: `seq.delete` shifts the whole tail per
+  ## removed record, which turned this into an accidental quadratic —
+  ## called once per content file against an access log that grows with
+  ## every load, it dominated large builds (98% of load-phase samples on
+  ## a 3,200-file site).
   if arena.tracking == nil:
     return
-  var i = 0
-  while i < arena.tracking.accesses.len:
-    if arena.tracking.accesses[i].consumerId == consumerId:
-      arena.tracking.accesses.delete(i)
-    else:
-      i += 1
+  var j = 0
+  for i in 0 ..< arena.tracking.accesses.len:
+    if arena.tracking.accesses[i].consumerId != consumerId:
+      if j != i:
+        arena.tracking.accesses[j] = move arena.tracking.accesses[i]
+      j.inc
+  arena.tracking.accesses.setLen(j)
 
 proc retireSubtree*(arena: Arena, id: NodeId) =
   ## Record a write on every node of a subtree that is being replaced
